@@ -152,6 +152,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CheckersMSG.h" />
+    <ClInclude Include="Checkers_server.h" />
     <ClInclude Include="game_core\checkers.h" />
     <ClInclude Include="game_core\graphics.h" />
     <ClInclude Include="game_core\includes.h" />

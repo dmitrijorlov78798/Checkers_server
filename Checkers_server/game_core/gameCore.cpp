@@ -1,5 +1,5 @@
 #include "gameCore.h"
-#include "../Checkers_server.cpp" // TODO .h
+#include "../Checkers_server.h" 
 
 /**
 * @brief метод запроса хода у игрока

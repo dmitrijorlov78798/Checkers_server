@@ -1,97 +1,70 @@
 ﻿// Checkers_server.cpp : Этот файл содержит функцию "main". Здесь начинается и заканчивается выполнение программы.
 //
-#include <queue>
 
-#include "system_lib/network.h"
-#include "system_lib/poolThread.h"
+#include "Checkers_server.h"
 
-#include "game_core/gameCore.h"
-#include "protocols/CheckersMSG.h"
-
-// работа с одним клиентом
-class ssesion_t : public network::TCP_socketClient_t, public gamer_t
+void ssesion_t::makeStep(const std::list<step_t> & possibleSteps, const std::function<void(step_t&& step)>& callback) 
 {
+    std::lock_guard<std::mutex> lock(m_mtx_);
 
-public :
-    void makeStep(const std::list<step_t> & possibleSteps, const std::function<void(step_t&& step)>& callback) override
+    Checkers_MSG_t msg(possibleSteps);
+    m_callback_ = callback;
+
+    m_TX_que_.push(std::move(msg));
+
+}
+
+void ssesion_t::make_request()
+{
+    std::lock_guard<std::mutex> lock(m_mtx_);
+
+    std::string buffer;
+    m_TX_que_.front().serialize(buffer);
+
+    if (int result = Send(buffer, m_TX_que_.front().get_offset()) == 0)
+        m_TX_que_.pop();
+    else if (result > 0)
+        m_TX_que_.front().set_offset(result);
+    else if (result != -3)
+        throw std::runtime_error("ssesion_t::make_step() error Send()");
+}
+
+void ssesion_t::make_answer()
+{
+    std::lock_guard<std::mutex> lock(m_mtx_);
+
+    std::string buffer;
+            
+    if (int result = Recive(buffer, Checkers_MSG_t::EOM) == 0)
     {
-        std::lock_guard<std::mutex> lock(m_mtx_);
+        m_RX_buf_.append(buffer);
 
-        Checkers_MSG_t msg(possibleSteps);
-        m_callback_ = callback;
+        Checkers_MSG_t msg(m_RX_buf_);
 
-        m_TX_que_.push(std::move(msg));
-
-    }
-
-    void make_request()
-    {
-        std::lock_guard<std::mutex> lock(m_mtx_);
-
-        std::string buffer;
-        m_TX_que_.front().serialize(buffer);
-
-        if (int result = Send(buffer, m_TX_que_.front().get_offset()) == 0)
-            m_TX_que_.pop();
-        else if (result > 0)
-            m_TX_que_.front().set_offset(result);
-        else if (result != -3)
-            throw std::runtime_error("ssesion_t::make_step() error Send()");
-    }
-
-    void make_answer()
-    {
-        std::lock_guard<std::mutex> lock(m_mtx_);
-
-        std::string buffer;
-                
-        if (int result = Recive(buffer, Checkers_MSG_t::EOM) == 0)
+        switch (msg.get_type())
         {
-            m_RX_buf_.append(buffer);
-
-            Checkers_MSG_t msg(m_RX_buf_);
-
-            switch (msg.get_type())
-            {
-            case typeMsg::answerStep:
-            {
-                if (auto option = msg.get_step())
-                    m_callback_(std::move(option.value()));
-                else
-                    throw std::runtime_error("ssesion_t::make_answer() error step_t deser");
-                break;
-            }
-            default:
-                throw std::runtime_error("ssesion_t::make_answer() invalid type msg");
-                break;
-            }
-
-            m_RX_buf_.clear();
+        case typeMsg::answerStep:
+        {
+            if (auto option = msg.get_step())
+                m_callback_(std::move(option.value()));
+            else
+                throw std::runtime_error("ssesion_t::make_answer() error step_t deser");
+            break;
         }
-        else if (result > 0)
-            m_RX_buf_.append(buffer);
-        else if (result != -3)
-            throw std::runtime_error("ssesion_t::make_answer() error Recive()");
+        default:
+            throw std::runtime_error("ssesion_t::make_answer() invalid type msg");
+            break;
+        }
+
+        m_RX_buf_.clear();
     }
+    else if (result > 0)
+        m_RX_buf_.append(buffer);
+    else if (result != -3)
+        throw std::runtime_error("ssesion_t::make_answer() error Recive()");
+}
 
-protected :
-    std::function<void(step_t&& step)>& m_callback_;
-    std::mutex m_mtx_;
-    std::queue<Checkers_MSG_t> m_TX_que_;
-    std::string m_RX_buf_;
-};
 
-// игровая сессия между клиентом - клиентом / клиентом - ботом
-class game_ssesion_t : public game_checkers_t
-{
-
-};
-
-// работа с ботом
-class AI_t : /*public sql_t,*/public gamer_t
-{
-
-};
 
 int main()
 {

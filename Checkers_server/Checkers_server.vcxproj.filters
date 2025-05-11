@@ -77,5 +77,8 @@
     <ClInclude Include="CheckersMSG.h">
       <Filter>Исходные файлы\protocols</Filter>
     </ClInclude>
+    <ClInclude Include="Checkers_server.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
